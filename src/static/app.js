@@ -23,28 +23,86 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        // Build participants list HTML
-        const participants = Array.isArray(details.participants) ? details.participants : [];
-        let participantsHTML = '<div class="participants"><h5>Participants</h5>';
-        participantsHTML += '<ul class="participants-list">';
-        if (participants.length === 0) {
-          participantsHTML += '<li class="participant-item empty">No participants yet</li>';
-        } else {
-          participants.forEach((p) => {
-            participantsHTML += `<li class="participant-item">${p}</li>`;
-          });
-        }
-        participantsHTML += '</ul></div>';
+          // Build participants list DOM
+          const participants = Array.isArray(details.participants) ? details.participants : [];
+          const participantsDiv = document.createElement('div');
+          participantsDiv.className = 'participants';
+          const h5 = document.createElement('h5');
+          h5.textContent = 'Participants';
+          participantsDiv.appendChild(h5);
 
-        activityCard.innerHTML = `
-          <h4>${name}</h4>
-          <p>${details.description}</p>
-          <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
-          ${participantsHTML}
-        `;
+          const ul = document.createElement('ul');
+          ul.className = 'participants-list';
 
-        activitiesList.appendChild(activityCard);
+          if (participants.length === 0) {
+            const li = document.createElement('li');
+            li.className = 'participant-item empty';
+            li.textContent = 'No participants yet';
+            ul.appendChild(li);
+          } else {
+            participants.forEach((p) => {
+              const li = document.createElement('li');
+              li.className = 'participant-item';
+              li.dataset.email = p;
+
+              const span = document.createElement('span');
+              span.className = 'participant-email';
+              span.textContent = p;
+
+              const del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'delete-btn';
+              del.title = 'Unregister participant';
+              del.innerHTML = '&times;';
+              del.dataset.activity = name;
+              del.dataset.email = p;
+
+              // Click handler for delete button
+              del.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const activityName = del.dataset.activity;
+                const email = del.dataset.email;
+                try {
+                  const resp = await fetch(`/activities/${encodeURIComponent(activityName)}/participants?email=${encodeURIComponent(email)}`, { method: 'DELETE' });
+                  const body = await resp.json();
+                  if (resp.ok) {
+                    // Remove the list item from the DOM
+                    li.remove();
+                    // If the list is empty now, show the empty state
+                    if (ul.querySelectorAll('.participant-item').length === 0) {
+                      const emptyLi = document.createElement('li');
+                      emptyLi.className = 'participant-item empty';
+                      emptyLi.textContent = 'No participants yet';
+                      ul.appendChild(emptyLi);
+                    }
+                  } else {
+                    console.error('Failed to unregister:', body);
+                    alert(body.detail || 'Failed to unregister participant');
+                  }
+                } catch (err) {
+                  console.error('Error unregistering participant:', err);
+                  alert('Network error while unregistering participant');
+                }
+              });
+
+              li.appendChild(span);
+              li.appendChild(del);
+              ul.appendChild(li);
+            });
+          }
+
+          participantsDiv.appendChild(ul);
+
+          activityCard.innerHTML = `
+            <h4>${name}</h4>
+            <p>${details.description}</p>
+            <p><strong>Schedule:</strong> ${details.schedule}</p>
+            <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          `;
+
+          activityCard.appendChild(participantsDiv);
+
+          activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
         const option = document.createElement("option");
@@ -79,6 +137,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities so the UI reflects the new participant immediately
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
